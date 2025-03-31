@@ -1,15 +1,35 @@
-import { Text, View } from "react-native";
+import { ActivityIndicator } from "react-native";
+import { ThemedView } from "@/components/ThemedView";
+import { useAuth } from "@/context/auth";
+import LoginForm from "@/components/LoginForm";
+import ProfileCard from "@/components/ProfileCard";
+export default function HomeScreen() {
+  const { user, isLoading } = useAuth();
 
-export default function Index() {
+  if (isLoading) {
+    return (
+      <ThemedView
+        style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+      >
+        <ActivityIndicator />
+      </ThemedView>
+    );
+  }
+
+  if (!user) {
+    return <LoginForm />;
+  }
+
   return (
-    <View
+    <ThemedView
       style={{
         flex: 1,
         justifyContent: "center",
         alignItems: "center",
+        gap: 20,
       }}
     >
-      <Text>Expo OAuth Testing App.</Text>
-    </View>
+      <ProfileCard />
+    </ThemedView>
   );
 }
