@@ -1,5 +1,4 @@
 import * as SecureStore from "expo-secure-store";
-import { Platform } from "react-native";
 
 /**
  * Creates a token cache for the native platform
@@ -49,6 +48,5 @@ const createTokenCache = (): {
   };
 };
 
-// SecureStore is not supported on the web and we use cookies instead
-export const tokenCache =
-  Platform.OS !== "web" ? createTokenCache() : undefined;
+// Export the token cache for mobile platforms
+export const tokenCache = createTokenCache();

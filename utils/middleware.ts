@@ -1,5 +1,5 @@
 import * as jose from "jose";
-import { COOKIE_NAME, JWT_SECRET } from "@/utils/constants";
+import { JWT_SECRET } from "@/utils/constants";
 
 export type AuthUser = {
   id: string;
@@ -11,14 +11,13 @@ export type AuthUser = {
   email_verified?: boolean;
   provider?: string;
   exp?: number;
-  cookieExpiration?: number; // Added for web cookie expiration tracking
 };
 
 /**
- * Middleware to authenticate API requests using JWT from Authorization header or cookies
+ * Middleware to authenticate API requests using JWT from Authorization header
  * @param handler The API route handler to be protected
  *
- * Note for devs: Technically, it's not a middleware in the traditional sense. This function acts as a higher-order function that adds authentication to API route handlers.
+ * Note for devs: This function acts as a higher-order function that adds authentication to API route handlers.
  */
 export function withAuth<T extends Response>(
   handler: (req: Request, user: AuthUser) => Promise<T>
@@ -27,29 +26,13 @@ export function withAuth<T extends Response>(
     try {
       let token: string | null = null;
 
-      // First, try to get token from Authorization header (for native apps)
+      // Get token from Authorization header (for native apps)
       const authHeader = req.headers.get("authorization");
       if (authHeader && authHeader.startsWith("Bearer ")) {
         token = authHeader.split(" ")[1];
       }
 
-      // If no token in header, try to get from cookies (for web)
-      if (!token) {
-        const cookieHeader = req.headers.get("cookie");
-        if (cookieHeader) {
-          // Parse cookies
-          const cookies = cookieHeader.split(";").reduce((acc, cookie) => {
-            const [key, value] = cookie.trim().split("=");
-            acc[key.trim()] = value;
-            return acc;
-          }, {} as Record<string, string>);
-
-          // Get token from cookie
-          token = cookies[COOKIE_NAME];
-        }
-      }
-
-      // If no token found in either place, return unauthorized
+      // If no token found, return unauthorized
       if (!token) {
         return Response.json(
           { error: "Authentication required" },
