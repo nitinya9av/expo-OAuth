@@ -3,6 +3,9 @@ import {
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
   GOOGLE_REDIRECT_URI,
+  DJANGO_AUTH_URL,
+  DJANGO_CLIENT_ID,
+  DJANGO_CLIENT_SECRET,
   JWT_EXPIRATION_TIME,
   JWT_SECRET,
   REFRESH_TOKEN_EXPIRY,
@@ -39,6 +42,35 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  // Fetch access and refresh tokens from Django backend
+  const djangoResponse = await fetch(DJANGO_AUTH_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      backend: "google-identity",
+      grant_type: "convert_token",
+      client_id: DJANGO_CLIENT_ID,
+      client_secret: DJANGO_CLIENT_SECRET,
+      token: data.id_token,
+    }),
+  });
+
+  const djangoData = await djangoResponse.json();
+
+  if (!djangoResponse.ok) {
+    return Response.json(
+      {
+        error: djangoData.error || "Failed to convert token",
+        message: djangoData.error_description || "An error occurred while converting the token",
+      },
+      { status: djangoResponse.status }
+    );
+  }
+
+  const apiAccessToken = djangoData.access_token
+  const apiRefreshToken = djangoData.refresh_token
+  const apiATexpiry = djangoData.expires_in
 
   const userInfo = jose.decodeJwt(data.id_token) as object;
 
@@ -99,5 +131,8 @@ export async function POST(request: Request) {
   return Response.json({
     accessToken,
     refreshToken,
+    apiAccessToken,
+    apiRefreshToken,
+    apiATexpiry,
   });
 }

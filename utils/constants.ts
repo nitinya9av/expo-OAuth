@@ -23,3 +23,9 @@ export const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 export const BASE_URL = process.env.EXPO_PUBLIC_BASE_URL;
 export const APP_SCHEME = process.env.EXPO_PUBLIC_SCHEME;
 export const JWT_SECRET = process.env.JWT_SECRET!;
+
+// API Constants
+export const DJANGO_API_URL = process.env.EXPO_PUBLIC_DJANGO_API_URL;
+export const DJANGO_CLIENT_ID = process.env.DJANGO_CLIENT_ID!;
+export const DJANGO_CLIENT_SECRET = process.env.DJANGO_CLIENT_SECRET!;
+export const DJANGO_AUTH_URL = `${DJANGO_API_URL}/auth/convert-token`;

@@ -9,7 +9,6 @@ import {
   useAuthRequest,
 } from "expo-auth-session";
 import { tokenCache } from "@/utils/cache";
-import { Platform } from "react-native";
 import { BASE_URL } from "@/utils/constants";
 import * as jose from "jose";
 
@@ -52,10 +51,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = React.useState<string | null>(null);
   const [refreshToken, setRefreshToken] = React.useState<string | null>(null);
+  const [apiAccessToken, setApiAccessToken] = React.useState<string | null>(null); // API access token
+  const [apiRefreshToken, setApiRefreshToken] = React.useState<string | null>(null); // API refresh token
   const [request, response, promptAsync] = useAuthRequest(config, discovery);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<AuthError | null>(null);
-  const isWeb = Platform.OS === "web";
   const refreshInProgressRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -70,6 +70,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // For native: Try to use the stored access token first
         const storedAccessToken = await tokenCache?.getToken("accessToken");
         const storedRefreshToken = await tokenCache?.getToken("refreshToken");
+        const storedApiAccessToken = await tokenCache?.getToken("apiAccessToken");
+        const storedApiRefreshToken = await tokenCache?.getToken("apiRefreshToken");
 
         console.log(
           "Restoring session - Access token:",
@@ -78,6 +80,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log(
           "Restoring session - Refresh token:",
           storedRefreshToken ? "exists" : "missing"
+        );
+        console.log(
+          "Restoring session - API Access token:",
+          storedApiAccessToken ? "exists" : "missing"
+        );
+        console.log(
+          "Restoring session - API Refresh token:", 
+          storedApiRefreshToken ? "exists" : "missing"
         );
 
         if (storedAccessToken) {
@@ -271,6 +281,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const tokens = await tokenResponse.json();
         const newAccessToken = tokens.accessToken;
         const newRefreshToken = tokens.refreshToken;
+        const newApiAccessToken = tokens.apiAccessToken;
+        const newApiRefreshToken = tokens.apiRefreshToken;
 
         console.log(
           "Received initial access token:",
@@ -280,16 +292,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           "Received initial refresh token:",
           newRefreshToken ? "exists" : "missing"
         );
+        console.log(
+          "Received initial API access token:",
+          newApiAccessToken ? "exists" : "missing"
+        );
+        console.log(
+          "Received initial API refresh token:",
+          newApiRefreshToken ? "exists" : "missing"
+        );
 
         // Store tokens in state
         if (newAccessToken) setAccessToken(newAccessToken);
         if (newRefreshToken) setRefreshToken(newRefreshToken);
+        if (newApiAccessToken) setApiAccessToken(newApiAccessToken);
+        if (newApiRefreshToken) setApiRefreshToken(newApiRefreshToken);
 
         // Save tokens to secure storage for persistence
         if (newAccessToken)
           await tokenCache?.saveToken("accessToken", newAccessToken);
         if (newRefreshToken)
           await tokenCache?.saveToken("refreshToken", newRefreshToken);
+        if (newApiAccessToken)
+          await tokenCache?.saveToken("apiAccessToken", newApiAccessToken);
+        if (newApiRefreshToken)
+          await tokenCache?.saveToken("apiRefreshToken", newApiRefreshToken);
+
+        console.log("API Access token:", apiAccessToken);
+        console.log("API Refresh token:", apiRefreshToken);
 
         // Decode the JWT access token to get user information
         if (newAccessToken) {
@@ -358,11 +387,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // For native: Clear both tokens from cache
     await tokenCache?.deleteToken("accessToken");
     await tokenCache?.deleteToken("refreshToken");
+    await tokenCache?.deleteToken("apiAccessToken");
+    await tokenCache?.deleteToken("apiRefreshToken");
 
     // Clear state
     setUser(null);
     setAccessToken(null);
     setRefreshToken(null);
+    setApiAccessToken(null);
+    setApiRefreshToken(null);
   };
 
   return (
