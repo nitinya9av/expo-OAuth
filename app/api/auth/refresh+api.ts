@@ -10,7 +10,6 @@ import {
  *
  * This endpoint refreshes the user's authentication token using a refresh token.
  * It implements token rotation - each refresh generates a new refresh token.
- * For web clients, it refreshes the cookies.
  * For native clients, it returns new tokens.
  */
 export async function POST(request: Request) {

@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
   const apiAccessToken = djangoData.access_token
   const apiRefreshToken = djangoData.refresh_token
-  const apiATexpiry = djangoData.expires_in
+  const apiExpiryTime = djangoData.expires_in
 
   const userInfo = jose.decodeJwt(data.id_token) as object;
 
@@ -133,6 +133,6 @@ export async function POST(request: Request) {
     refreshToken,
     apiAccessToken,
     apiRefreshToken,
-    apiATexpiry,
+    apiExpiryTime,
   });
 }

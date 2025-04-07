@@ -8,6 +8,9 @@ const createTokenCache = (): {
   getToken: (key: string) => Promise<string | null>;
   saveToken: (key: string, token: string) => Promise<void>;
   deleteToken: (key: string) => Promise<void>;
+
+  getExpiryTime: (key: string) => Promise<number | null>;
+  saveExpiryTime: (key: string, expiryTime: number) => Promise<void>;
 } => {
   return {
     /**
@@ -44,6 +47,29 @@ const createTokenCache = (): {
      */
     deleteToken: (key: string) => {
       return SecureStore.deleteItemAsync(key);
+    },
+
+    /**
+     * Saves the expiry time of a token to the cache
+     * @param key - The key to save the expiry time to
+     * @param expiryTime - The expiry time to save
+     */
+    saveExpiryTime: (key: string, expiryTime: number) => {
+      return SecureStore.setItemAsync(key, expiryTime.toString());
+    },
+    /**
+     * Gets the expiry time of a token from the cache
+     * @param key - The key to get the expiry time from
+     * @returns the expiry time or null if it doesn't exist
+     */
+    getExpiryTime: async (key: string) => {
+      try {
+        const item = await SecureStore.getItemAsync(key);
+        return item ? parseInt(item, 10) : null;
+      } catch (error) {
+        console.error("secure store get expiry error: ", error);
+        return null;
+      }
     },
   };
 };

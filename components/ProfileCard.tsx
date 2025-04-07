@@ -7,6 +7,7 @@ import { tokenCache } from "@/utils/cache";
 export default function ProfileCard() {
   const { signOut, user } = useAuth();
   const [apiAccessToken, setApiAccessToken] = useState<string | null>(null);
+  const [apiATexpiry, setApiATexpiry] = useState<number | null>(null);
   const [apiRefreshToken, setApiRefreshToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,6 +19,10 @@ export default function ProfileCard() {
       // Fetch API refresh token
       const storedApiRefreshToken = await tokenCache?.getToken("apiRefreshToken");
       setApiRefreshToken(storedApiRefreshToken);
+
+      // Fetch API access token expiry time
+      const storedApiATexpiry = await tokenCache?.getExpiryTime("apiExpiryTime");
+      setApiATexpiry(storedApiATexpiry);
     };
 
     // Fetch tokens once when the component mounts
@@ -70,6 +75,23 @@ export default function ProfileCard() {
           }}
         >
           {apiAccessToken !== null ? apiAccessToken : "No API Access Token"}
+        </ThemedText>
+      </View>
+
+      <View>
+        <ThemedText type="defaultSemiBold" style={{ textAlign: "center" }}>
+          API Access Token Expiry:
+        </ThemedText>
+        <ThemedText
+          type="defaultSemiBold"
+          style={{
+            textAlign: "center",
+            fontSize: 12,
+            color: "gray",
+            wordWrap: "break-word",
+          }}
+        >
+          {apiATexpiry !== null ? apiATexpiry : "No Api Access Token Expiry"}
         </ThemedText>
       </View>
 

@@ -20,6 +20,8 @@ const AuthContext = React.createContext({
   signOut: () => { },
   fetchWithAuth: (url: string, options: RequestInit) =>
     Promise.resolve(new Response()),
+  fetchWithApiAuth: (url: string, options: RequestInit) =>
+    Promise.resolve(new Response()),
   isLoading: false,
   error: null as AuthError | null,
 });
@@ -51,9 +53,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = React.useState<string | null>(null);
   const [refreshToken, setRefreshToken] = React.useState<string | null>(null);
-  const [apiAccessToken, setApiAccessToken] = React.useState<string | null>(null); // API access token
-  const [apiRefreshToken, setApiRefreshToken] = React.useState<string | null>(null); // API refresh token
+  const [apiAccessToken, setApiAccessToken] = React.useState<string | null>(null);
+  const [apiRefreshToken, setApiRefreshToken] = React.useState<string | null>(null);
   const [request, response, promptAsync] = useAuthRequest(config, discovery);
+  const [apiExpiryTime, setApiExpiryTime] = React.useState<number | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<AuthError | null>(null);
   const refreshInProgressRef = React.useRef(false);
@@ -72,6 +75,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const storedRefreshToken = await tokenCache?.getToken("refreshToken");
         const storedApiAccessToken = await tokenCache?.getToken("apiAccessToken");
         const storedApiRefreshToken = await tokenCache?.getToken("apiRefreshToken");
+        const storedApiExpiryTime = await tokenCache?.getExpiryTime("apiExpiryTime")
 
         console.log(
           "Restoring session - Access token:",
@@ -86,7 +90,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           storedApiAccessToken ? "exists" : "missing"
         );
         console.log(
-          "Restoring session - API Refresh token:", 
+          "Restoring session - API Refresh token:",
           storedApiRefreshToken ? "exists" : "missing"
         );
 
@@ -125,6 +129,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await refreshAccessToken(storedRefreshToken);
         } else {
           console.log("User is not authenticated");
+        }
+
+        if (storedApiAccessToken && storedApiRefreshToken) {
+          try {
+            // Check if the API access token is still valid
+            const now = Math.floor(Date.now() / 1000);
+
+            // Check if token is still valid based on stored expiry
+            if (storedApiExpiryTime && storedApiExpiryTime > now + 60) { // Add 60s buffer
+              console.log("API access token is still valid, using it");
+              setApiAccessToken(storedApiAccessToken);
+              setApiRefreshToken(storedApiRefreshToken);
+
+              // Schedule refresh based on stored expiry
+              scheduleApiTokenRefresh(storedApiExpiryTime);
+            } else {
+              // Token expired or expiry unknown, refresh it
+              console.log("API access token expired or expiry unknown, refreshing");
+              setApiRefreshToken(storedApiRefreshToken);
+              await refreshApiAccessToken();
+            }
+          } catch (e) {
+            console.error("Error decoding stored API token:", e);
+
+            // Try to refresh using the API refresh token
+            if (storedApiRefreshToken) {
+              console.log("Error with API access token, trying refresh token");
+              setApiRefreshToken(storedApiRefreshToken);
+              await refreshApiAccessToken();
+            }
+          }
         }
       } catch (error) {
         console.error("Error restoring session:", error);
@@ -241,6 +276,91 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const scheduleApiTokenRefresh = (expiryInSeconds: number) => {
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeUntilExpiry = expiryInSeconds - currentTime;
+
+    // Refresh the token 1 minute before it expires
+    const refreshTime = Math.max(timeUntilExpiry - 60, 0) * 1000;
+
+    setTimeout(() => {
+      refreshApiAccessToken();
+    }, refreshTime);
+  };
+
+  const refreshApiAccessToken = async () => {
+  
+    const apiRefreshToken = await tokenCache?.getToken("apiRefreshToken");
+
+    if (!apiRefreshToken) {
+      console.error("No API refresh token available");
+      return null;
+    }
+
+    try {
+      console.log("Refreshing API access token...");
+
+      const response = await fetch(`${BASE_URL}/api/auth/apirefresh`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiRefreshToken,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("API token refresh failed:", errorData);
+
+        // If refresh fails due to expired token, sign out
+        if (response.status === 401) {
+          signOut();
+        }
+        return null;
+      }
+
+      const tokens = await response.json();
+      const newApiAccessToken = tokens.apiAccessToken;
+      const newApiRefreshToken = tokens.apiRefreshToken;
+      const newApiExpiryTime = tokens.apiExpiryTime;
+
+      console.log(
+        "Received new API access token:",
+        newApiAccessToken ? "exists" : "missing"
+      );
+      console.log(
+        "Received new API refresh token:",
+        newApiRefreshToken ? "exists" : "missing"
+      );
+
+      if (newApiAccessToken) setApiAccessToken(newApiAccessToken);
+      if (newApiRefreshToken) setApiRefreshToken(newApiRefreshToken);
+
+      if (newApiAccessToken)
+        await tokenCache?.saveToken("apiAccessToken", newApiAccessToken);
+        console.log("Api Access Token", newApiAccessToken);
+      if (newApiRefreshToken)
+        await tokenCache?.saveToken("apiRefreshToken", newApiRefreshToken);
+      if (newApiExpiryTime) {
+        console.log("Raw newApiExpiryTime received:", newApiExpiryTime);
+        const expiryTime = Math.floor(Date.now() / 1000) + newApiExpiryTime;
+        console.log("Calculated expiryTime to save:", expiryTime);
+        console.log("Current time:", Math.floor(Date.now() / 1000));
+        await tokenCache?.saveExpiryTime("apiExpiryTime", expiryTime);
+
+        scheduleApiTokenRefresh(expiryTime);
+      }
+
+      return newApiAccessToken;
+    } catch (error) {
+      console.error("Error refreshing API token:", error);
+      signOut();
+      return null;
+    }
+  };
+
   async function handleResponse() {
     // This function is called when Google redirects back to our app
     // The response contains the authorization code that we'll exchange for tokens
@@ -283,6 +403,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const newRefreshToken = tokens.refreshToken;
         const newApiAccessToken = tokens.apiAccessToken;
         const newApiRefreshToken = tokens.apiRefreshToken;
+        const newApiExpiryTime = tokens.apiExpiryTime;
 
         console.log(
           "Received initial access token:",
@@ -306,6 +427,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (newRefreshToken) setRefreshToken(newRefreshToken);
         if (newApiAccessToken) setApiAccessToken(newApiAccessToken);
         if (newApiRefreshToken) setApiRefreshToken(newApiRefreshToken);
+        if (newApiExpiryTime) setApiExpiryTime(newApiExpiryTime);
 
         // Save tokens to secure storage for persistence
         if (newAccessToken)
@@ -316,6 +438,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           await tokenCache?.saveToken("apiAccessToken", newApiAccessToken);
         if (newApiRefreshToken)
           await tokenCache?.saveToken("apiRefreshToken", newApiRefreshToken);
+        if (newApiExpiryTime) {
+          console.log("Raw newApiExpiryTime received:", newApiExpiryTime);
+          const expiryTime = Math.floor(Date.now() / 1000) + newApiExpiryTime;
+          console.log("Calculated expiryTime to save:", expiryTime);
+          console.log("Current time:", Math.floor(Date.now() / 1000));
+          await tokenCache?.saveExpiryTime("apiExpiryTime", expiryTime);
+
+          scheduleApiTokenRefresh(expiryTime);
+        }
 
         console.log("API Access token:", apiAccessToken);
         console.log("API Refresh token:", apiRefreshToken);
@@ -369,6 +500,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return response;
   };
 
+  // Add this function to your auth context to make API-authenticated requests
+  const fetchWithApiAuth = async (url: string, options: RequestInit) => {
+    // Use API access token in Authorization header
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${apiAccessToken}`,
+      },
+    });
+
+    // If the response indicates an authentication error, try to refresh the API token
+    if (response.status === 401) {
+      console.log("API request failed with 401, attempting to refresh API token");
+
+      // Try to refresh the API token
+      const newApiToken = await refreshApiAccessToken();
+
+      // If we got a new API token, retry the request with it
+      if (newApiToken) {
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...options.headers,
+            Authorization: `Bearer ${newApiToken}`,
+          },
+        });
+      }
+    }
+
+    return response;
+  };
+
   const signIn = async () => {
     console.log("signIn");
     try {
@@ -407,6 +571,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isLoading,
         error,
         fetchWithAuth,
+        fetchWithApiAuth,
       }}
     >
       {children}
